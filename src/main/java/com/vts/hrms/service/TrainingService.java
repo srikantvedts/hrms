@@ -1,0 +1,289 @@
+package com.vts.hrms.service;
+
+import com.vts.hrms.dto.*;
+import com.vts.hrms.entity.Organizer;
+import com.vts.hrms.entity.Calendar;
+import com.vts.hrms.entity.Program;
+import com.vts.hrms.entity.Requisition;
+import com.vts.hrms.exception.NotFoundException;
+import com.vts.hrms.mapper.AgencyMapper;
+import com.vts.hrms.mapper.CalendarMapper;
+import com.vts.hrms.mapper.ProgramMapper;
+import com.vts.hrms.mapper.RequisitionMapper;
+import com.vts.hrms.repository.OrganizerRepository;
+import com.vts.hrms.repository.CalenderRepository;
+import com.vts.hrms.repository.ProgramRepository;
+import com.vts.hrms.repository.RequisitionRepository;
+import com.vts.hrms.util.FileStorageUtil;
+import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+@Service
+public class TrainingService {
+
+    private static final Logger log = LoggerFactory.getLogger(TrainingService.class);
+
+    @Value("${appStorage}")
+    private String appStorage;
+
+    @Value("${x_api_key}")
+    private String xApiKey;
+
+    private final MasterClientService masterClient;
+    private final OrganizerRepository organizerRepository;
+    private final AgencyMapper agencyMapper;
+    private final CalendarMapper calenderMapper;
+    private final CalenderRepository calenderRepository;
+    private final ProgramMapper programMapper;
+    private final ProgramRepository programRepository;
+    private final RequisitionMapper requisitionMapper;
+    private final RequisitionRepository requisitionRepository;
+
+    public TrainingService(MasterClientService masterClient, OrganizerRepository organizerRepository, AgencyMapper agencyMapper, CalendarMapper calenderMapper, CalenderRepository calenderRepository, ProgramMapper programMapper, ProgramRepository programRepository, RequisitionMapper requisitionMapper, RequisitionRepository requisitionRepository) {
+        this.masterClient = masterClient;
+        this.organizerRepository = organizerRepository;
+        this.agencyMapper = agencyMapper;
+        this.calenderMapper = calenderMapper;
+        this.calenderRepository = calenderRepository;
+        this.programMapper = programMapper;
+        this.programRepository = programRepository;
+        this.requisitionMapper = requisitionMapper;
+        this.requisitionRepository = requisitionRepository;
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrganizerIdDTO> getAllAgencies() {
+        List<Organizer> list = organizerRepository.findAllByIsActive(1);
+        return list.stream().map(agencyMapper::toDto).collect(Collectors.toCollection(LinkedList::new));
+    }
+
+    @Transactional
+    public CalendarDTO addCalenderData(CalendarDTO dto, String username) throws IOException {
+        log.info("Request to save calender for year {} by {}", dto.getYear() ,username);
+        Calendar calender = calenderMapper.toEntity(dto);
+        calender.setCreatedBy(username);
+        calender.setCreatedDate(LocalDateTime.now());
+        calender.setIsActive(1);
+
+        if (dto.getFile() != null && !dto.getFile().isEmpty()) {
+            Path fullpath = Paths.get(appStorage, "Calendar", dto.getYear());
+            calender.setFileName(dto.getFile().getOriginalFilename());
+            FileStorageUtil.saveFile(fullpath, dto.getFile().getOriginalFilename(), dto.getFile());
+        }
+
+        calender = calenderRepository.save(calender);
+        return calenderMapper.toDto(calender);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CalendarDTO> getCalenderList(String year, String username) {
+        log.info("Calender list fetched by {}", username);
+        List<Organizer> agencies = organizerRepository.findAllByIsActive(1);
+        List<Calendar> calenderList = calenderRepository.findAllByYearAndIsActive(year,1);
+
+        Map<Long, Organizer> agencyMap = agencies.stream()
+                .collect(Collectors.toMap(Organizer::getOrganizerId, Function.identity()));
+
+        List<CalendarDTO> dtoList = calenderMapper.toDto(calenderList);
+
+        dtoList.forEach(dto -> {
+            Organizer organizer = agencyMap.get(dto.getAgencyId());
+            if (organizer != null) {
+                dto.setAgency(organizer.getOrganizer());
+            }
+        });
+        return dtoList;
+    }
+
+    public Optional<CalendarDTO> getCalendarById(Long id, String username) {
+        return calenderRepository.findById(id).map(calenderMapper::toDto);
+    }
+
+    @Transactional
+    public ProgramDTO addProgramData(@Valid ProgramDTO dto, String username) {
+        log.info("Request to add program {} by {}", dto.getProgramName(),username);
+        Program program = programMapper.toEntity(dto);
+        program.setCreatedBy(username);
+        program.setCreatedDate(LocalDateTime.now());
+        program.setIsActive(1);
+        program = programRepository.save(program);
+
+        Organizer organizer = organizerRepository.findById(program.getOrganizerId())
+                .orElseThrow(()-> new NotFoundException("Organizer data not found"));
+
+        ProgramDTO programDTO = programMapper.toDto(program);
+        programDTO.setOrganizer(organizer.getOrganizer());
+
+        return programDTO;
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProgramDTO> getProgramList(String username) {
+        log.info("Program list fetched by {}", username);
+        List<Organizer> organizerList = organizerRepository.findAllByIsActive(1);
+        List<Program> programList = programRepository.findAllByIsActive(1);
+
+        Map<Long, Organizer> organizerMap = organizerList.stream()
+                .collect(Collectors.toMap(Organizer::getOrganizerId, Function.identity()));
+
+        List<ProgramDTO> dtoList = programMapper.toDto(programList);
+
+        dtoList.forEach(dto -> {
+            Organizer organizer = organizerMap.get(dto.getOrganizerId());
+            if (organizer != null) {
+                dto.setOrganizer(organizer.getOrganizer());
+            }
+        });
+        return dtoList;
+    }
+
+    @Transactional
+    public RequisitionDTO addRequisitionData(@Valid RequisitionDTO dto, String username) throws IOException {
+        log.info("Request to add requisition for program {} by {}", dto.getProgramName(), username);
+
+        Requisition requisition = requisitionMapper.toEntity(dto);
+        requisition.setStatus("AA");
+        requisition.setCreatedBy(username);
+        requisition.setCreatedDate(LocalDateTime.now());
+        requisition.setIsActive(1);
+
+        Path fullpath = Paths.get(appStorage, "Requisition");
+        if (dto.getMultipartFileEcs() != null && !dto.getMultipartFileEcs().isEmpty()) {
+            requisition.setFileEcs(dto.getMultipartFileEcs().getOriginalFilename());
+            FileStorageUtil.saveFile(fullpath, dto.getMultipartFileEcs().getOriginalFilename(), dto.getMultipartFileEcs());
+        }
+        if (dto.getMultipartFileCheque() != null && !dto.getMultipartFileCheque().isEmpty()) {
+            requisition.setFileCheque(dto.getMultipartFileCheque().getOriginalFilename());
+            FileStorageUtil.saveFile(fullpath, dto.getMultipartFileCheque().getOriginalFilename(), dto.getMultipartFileCheque());
+        }
+        if (dto.getMultipartFilePan() != null && !dto.getMultipartFilePan().isEmpty()) {
+            requisition.setFilePan(dto.getMultipartFilePan().getOriginalFilename());
+            FileStorageUtil.saveFile(fullpath, dto.getMultipartFilePan().getOriginalFilename(), dto.getMultipartFilePan());
+        }
+        if (dto.getMultipartFileBrochure() != null && !dto.getMultipartFileBrochure().isEmpty()) {
+            requisition.setFileBrochure(dto.getMultipartFileBrochure().getOriginalFilename());
+            FileStorageUtil.saveFile(fullpath, dto.getMultipartFileBrochure().getOriginalFilename(), dto.getMultipartFileBrochure());
+        }
+
+        requisition = requisitionRepository.save(requisition);
+        return requisitionMapper.toDto(requisition);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RequisitionDTO> getRequisitionList(String username) {
+        log.info("Requisition list fetched by {}", username);
+        List<Organizer> organizerList = organizerRepository.findAllByIsActive(1);
+        List<Program> programList = programRepository.findAllByIsActive(1);
+        List<Requisition> list = requisitionRepository.findAllByIsActive(1);
+
+        List<EmployeeDTO> employeeList = masterClient.getEmployeeList(xApiKey);
+
+        Map<Long, EmployeeDTO> employeeMap = employeeList.stream()
+                .collect(Collectors.toMap(EmployeeDTO::getEmpId, emp -> emp));
+
+        Map<Long, Organizer> organizerMap = organizerList.stream()
+                .collect(Collectors.toMap(Organizer::getOrganizerId, Function.identity()));
+
+        Map<Long, Program> programMap = programList.stream()
+                .collect(Collectors.toMap(Program::getProgramId, Function.identity()));
+
+        List<RequisitionDTO> dtoList = requisitionMapper.toDto(list);
+
+        dtoList.forEach(dto -> {
+            EmployeeDTO employeeDTO = employeeMap.get(dto.getInitiatingOfficer());
+            Program program = programMap.get(dto.getProgramId());
+            Organizer organizer = organizerMap.get(program.getOrganizerId());
+            dto.setProgramName(program.getProgramName());
+            if (organizer != null) {
+                dto.setOrganizer(organizer.getOrganizer());
+            }
+            if (employeeDTO != null) {
+                dto.setInitiatingOfficerName((employeeDTO.getTitle()!=null ? employeeDTO.getTitle() : "")
+                        + " " + employeeDTO.getEmpName()
+                + ", " + (employeeDTO.getEmpDesigName()!=null ? employeeDTO.getEmpDesigName() : ""));
+            }
+        });
+        return dtoList;
+    }
+
+    @Transactional
+    public RequisitionDTO getRequisitionById(Long id, String username) {
+        log.info("Request to fetch Requisition data for id {} by {}", id, username);
+        if(id==null){
+            throw new NotFoundException("Requisition id cannot be null");
+        }
+        List<Organizer> organizerList = organizerRepository.findAllByIsActive(1);
+        List<Program> programList = programRepository.findAllByIsActive(1);
+
+        Map<Long, Organizer> organizerMap = organizerList.stream()
+                .collect(Collectors.toMap(Organizer::getOrganizerId, Function.identity()));
+
+        Map<Long, Program> programMap = programList.stream()
+                .collect(Collectors.toMap(Program::getProgramId, Function.identity()));
+
+        Requisition requisition = requisitionRepository.findById(id).orElseThrow(() -> new NotFoundException("Requisition not found"));
+
+        Program program = programMap.get(requisition.getProgramId());
+        Organizer org = organizerMap.get(program.getOrganizerId());
+
+        RequisitionDTO requisitionDTO =  requisitionMapper.toDto(requisition);
+        requisitionDTO.setOrganizer(org.getOrganizer());
+        requisitionDTO.setOrganizerId(org.getOrganizerId());
+        return requisitionDTO;
+    }
+
+    @Transactional
+    public Optional<RequisitionDTO> updateRequisitionData(@Valid RequisitionDTO dto, String username) {
+        log.info("Request to update requisition for id {} by {}", dto.getRequisitionId(), username);
+
+        Path fullpath = Paths.get(appStorage, "Requisition");
+  
+        return requisitionRepository
+                .findById(dto.getRequisitionId())
+                .map(existingReq -> {
+                    existingReq.setModifiedBy(username);
+                    existingReq.setModifiedDate(LocalDateTime.now());
+
+                    if(dto.getMultipartFileEcs()!=null && !dto.getMultipartFileEcs().isEmpty()){
+                        if (existingReq.getFileEcs() != null) {
+                            Path oldFilePath = fullpath.resolve(existingReq.getFileEcs());
+                            try {
+                                if (Files.exists(oldFilePath)) {
+                                    Files.delete(oldFilePath);
+                                    log.info("Deleted old file: {}", oldFilePath);
+                                }
+                            } catch (Exception ex) {
+                                log.warn("Failed to delete old file: {}", oldFilePath, ex);
+                            }
+                        }
+                        String newFileName = dto.getMultipartFileEcs().getOriginalFilename();
+                        try {
+                            FileStorageUtil.saveFile(fullpath, newFileName, dto.getMultipartFileEcs());
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                        existingReq.setFileEcs(newFileName);
+                    }
+                    requisitionMapper.partialUpdate(existingReq, dto);
+                    return existingReq;
+                })
+                .map(requisitionRepository::save)
+                .map(requisitionMapper::toDto);
+    }
+}

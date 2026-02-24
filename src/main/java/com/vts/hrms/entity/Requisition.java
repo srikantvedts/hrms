@@ -1,0 +1,90 @@
+package com.vts.hrms.entity;
+
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
+import org.hibernate.annotations.Cache;
+import org.hibernate.annotations.CacheConcurrencyStrategy;
+
+import java.io.Serializable;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+@Data
+@Entity
+@Table(name = "hrms_requisition")
+@Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+public class Requisition implements Serializable {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "requisition_id", nullable = false)
+    private Long requisitionId;
+
+    @NotNull
+    @Column(name = "program_id", nullable = false)
+    private Long programId;
+
+    @NotNull
+    @Column(name = "initiating_officer", nullable = false)
+    private Long initiatingOfficer;
+
+    @Size(max = 100)
+    @Column(name = "reference", length = 100)
+    private String reference;
+
+    @Column(name = "from_date")
+    private LocalDate fromDate;
+
+    @Column(name = "to_date")
+    private LocalDate toDate;
+
+    @Column(name = "duration")
+    private Integer duration;
+
+    @Column(name = "mode_of_payment")
+    private String modeOfPayment;
+
+    @Size(max = 2000)
+    @Column(name = "necessity", length = 2000)
+    private String necessity;
+
+    @Size(max = 1)
+    @Column(name = "is_submitted", length = 1)
+    private String isSubmitted;
+
+    @Column(name = "file_ecs")
+    private String fileEcs;
+
+    @Column(name = "status")
+    private String status;
+
+    @Column(name = "file_cheque")
+    private String fileCheque;
+
+    @Column(name = "file_pan")
+    private String filePan;
+
+    @Column(name = "file_brochure")
+    private String fileBrochure;
+
+    @NotNull
+    @Column(name = "is_active", nullable = false)
+    private Integer isActive;
+
+    @Size(max = 100)
+    @Column(name = "created_by", length = 100)
+    private String createdBy;
+
+    @Column(name = "created_date")
+    private LocalDateTime createdDate;
+
+    @Size(max = 100)
+    @Column(name = "modified_by", length = 100)
+    private String modifiedBy;
+
+    @Column(name = "modified_date")
+    private LocalDateTime modifiedDate;
+
+}

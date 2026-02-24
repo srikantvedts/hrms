@@ -1,0 +1,46 @@
+package com.vts.hrms.repository;
+
+import com.vts.hrms.dto.LoginEmployeeDto;
+import com.vts.hrms.dto.UserResponseDTO;
+import com.vts.hrms.entity.Login;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+public interface LoginRepository extends JpaRepository<Login, Long> {
+
+    @Query(value = """
+        SELECT
+               a.login_id  AS loginId,
+               c.role_id   AS roleId,
+               a.emp_id    AS empId,
+               NULL   AS  divisionId,
+               a.username   AS username,
+               NULL AS employeeName,
+               NULL AS designationName,
+               c.role_name AS roleName,
+               NULL AS divisionName
+               FROM login a
+               LEFT JOIN login_role_security b ON b.login_id = a.login_id
+               LEFT JOIN role_security c ON c.role_id = b.role_id
+               WHERE a.is_active = 1 ;""", nativeQuery = true)
+    List<UserResponseDTO> getUserList();
+
+    boolean existsByUsernameIgnoreCase(String username);
+
+    @Query(value = "SELECT DISTINCT d.emp_id, NULL AS emp_code, NULL AS employee_type, NULL AS title, NULL AS full_name, \n" +
+            "            NULL AS designation_name, NULL AS employee_status, f.role_name, NULL AS division_id, d.login_id ,f.role_id\n" +
+            "            FROM login d \n" +
+            "            JOIN login_role_security e ON e.login_id=d.login_id \n" +
+            "            JOIN role_security f ON f.role_id=e.role_id \n" +
+            "            WHERE  d.username=:username \n" +
+            "            AND d.is_active=1", nativeQuery = true)
+    LoginEmployeeDto findByUserName(@Param("username") String username);
+
+    Login findByUsernameAndIsActive(String username, int isActive);
+}
+
