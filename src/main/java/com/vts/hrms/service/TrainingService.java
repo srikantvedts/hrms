@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -31,6 +32,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -75,7 +77,7 @@ public class TrainingService {
 
     @Transactional
     public CalendarDTO addCalenderData(CalendarDTO dto, String username) throws IOException {
-        log.info("Request to save calender for year {} by {}", dto.getYear() ,username);
+        log.info("Request to save calender for year {} by {}", dto.getYear(), username);
         Calendar calender = calenderMapper.toEntity(dto);
         calender.setCreatedBy(username);
         calender.setCreatedDate(LocalDateTime.now());
@@ -95,7 +97,7 @@ public class TrainingService {
     public List<CalendarDTO> getCalenderList(String year, String username) {
         log.info("Calender list fetched by {}", username);
         List<Organizer> agencies = organizerRepository.findAllByIsActive(1);
-        List<Calendar> calenderList = calenderRepository.findAllByYearAndIsActive(year,1);
+        List<Calendar> calenderList = calenderRepository.findAllByYearAndIsActive(year, 1);
 
         Map<Long, Organizer> agencyMap = agencies.stream()
                 .collect(Collectors.toMap(Organizer::getOrganizerId, Function.identity()));
@@ -117,7 +119,7 @@ public class TrainingService {
 
     @Transactional
     public ProgramDTO addProgramData(@Valid ProgramDTO dto, String username) {
-        log.info("Request to add program {} by {}", dto.getProgramName(),username);
+        log.info("Request to add program {} by {}", dto.getProgramName(), username);
         Program program = programMapper.toEntity(dto);
         program.setCreatedBy(username);
         program.setCreatedDate(LocalDateTime.now());
@@ -125,7 +127,7 @@ public class TrainingService {
         program = programRepository.save(program);
 
         Organizer organizer = organizerRepository.findById(program.getOrganizerId())
-                .orElseThrow(()-> new NotFoundException("Organizer data not found"));
+                .orElseThrow(() -> new NotFoundException("Organizer data not found"));
 
         ProgramDTO programDTO = programMapper.toDto(program);
         programDTO.setOrganizer(organizer.getOrganizer());
@@ -210,13 +212,22 @@ public class TrainingService {
             Program program = programMap.get(dto.getProgramId());
             Organizer organizer = organizerMap.get(program.getOrganizerId());
             dto.setProgramName(program.getProgramName());
+            dto.setVenue(program.getVenue());
+            dto.setRegistrationFee(program.getRegistrationFee());
             if (organizer != null) {
                 dto.setOrganizer(organizer.getOrganizer());
+                dto.setOrganizerContactName(organizer.getContactName());
+                dto.setOrganizerPhoneNo(organizer.getPhoneNo());
+                dto.setOrganizerFaxNo(organizer.getFaxNo());
+                dto.setOrganizerEmail(organizer.getEmail());
             }
             if (employeeDTO != null) {
-                dto.setInitiatingOfficerName((employeeDTO.getTitle()!=null ? employeeDTO.getTitle() : "")
-                        + " " + employeeDTO.getEmpName()
-                + ", " + (employeeDTO.getEmpDesigName()!=null ? employeeDTO.getEmpDesigName() : ""));
+                dto.setEmpNo(employeeDTO.getEmpNo());
+                dto.setInitiatingOfficerName((employeeDTO.getTitle() != null ? employeeDTO.getTitle() : "") + " " + employeeDTO.getEmpName());
+                dto.setEmpDesigName(employeeDTO.getEmpDesigName());
+                dto.setEmpDivCode(employeeDTO.getEmpDivCode());
+                dto.setEmail(employeeDTO.getEmail());
+                dto.setMobileNo(employeeDTO.getMobileNo());
             }
         });
         return dtoList;
@@ -225,7 +236,7 @@ public class TrainingService {
     @Transactional
     public RequisitionDTO getRequisitionById(Long id, String username) {
         log.info("Request to fetch Requisition data for id {} by {}", id, username);
-        if(id==null){
+        if (id == null) {
             throw new NotFoundException("Requisition id cannot be null");
         }
         List<Organizer> organizerList = organizerRepository.findAllByIsActive(1);
@@ -242,48 +253,71 @@ public class TrainingService {
         Program program = programMap.get(requisition.getProgramId());
         Organizer org = organizerMap.get(program.getOrganizerId());
 
-        RequisitionDTO requisitionDTO =  requisitionMapper.toDto(requisition);
+        RequisitionDTO requisitionDTO = requisitionMapper.toDto(requisition);
         requisitionDTO.setOrganizer(org.getOrganizer());
         requisitionDTO.setOrganizerId(org.getOrganizerId());
+        requisitionDTO.setProgramName(program.getProgramName());
+        requisitionDTO.setVenue(program.getVenue());
+        requisitionDTO.setRegistrationFee(program.getRegistrationFee());
         return requisitionDTO;
     }
 
     @Transactional
     public Optional<RequisitionDTO> updateRequisitionData(@Valid RequisitionDTO dto, String username) {
+
         log.info("Request to update requisition for id {} by {}", dto.getRequisitionId(), username);
 
         Path fullpath = Paths.get(appStorage, "Requisition");
-  
+
         return requisitionRepository
                 .findById(dto.getRequisitionId())
                 .map(existingReq -> {
                     existingReq.setModifiedBy(username);
                     existingReq.setModifiedDate(LocalDateTime.now());
 
-                    if(dto.getMultipartFileEcs()!=null && !dto.getMultipartFileEcs().isEmpty()){
-                        if (existingReq.getFileEcs() != null) {
-                            Path oldFilePath = fullpath.resolve(existingReq.getFileEcs());
-                            try {
-                                if (Files.exists(oldFilePath)) {
-                                    Files.delete(oldFilePath);
-                                    log.info("Deleted old file: {}", oldFilePath);
-                                }
-                            } catch (Exception ex) {
-                                log.warn("Failed to delete old file: {}", oldFilePath, ex);
-                            }
-                        }
-                        String newFileName = dto.getMultipartFileEcs().getOriginalFilename();
-                        try {
-                            FileStorageUtil.saveFile(fullpath, newFileName, dto.getMultipartFileEcs());
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                        existingReq.setFileEcs(newFileName);
-                    }
+                    // ECS
+                    updateFile(dto.getMultipartFileEcs(), existingReq.getFileEcs(), fullpath,existingReq::setFileEcs);
+                    // Cheque
+                    updateFile(dto.getMultipartFileCheque(), existingReq.getFileCheque(), fullpath, existingReq::setFileCheque);
+                    // PAN
+                    updateFile(dto.getMultipartFilePan(), existingReq.getFilePan(), fullpath, existingReq::setFilePan);
+                    // Brochure
+                    updateFile(dto.getMultipartFileBrochure(), existingReq.getFileBrochure(), fullpath, existingReq::setFileBrochure);
+
                     requisitionMapper.partialUpdate(existingReq, dto);
                     return existingReq;
                 })
                 .map(requisitionRepository::save)
                 .map(requisitionMapper::toDto);
     }
+
+    private void updateFile(MultipartFile multipartFile,
+                            String existingFileName,
+                            Path fullPath,
+                            Consumer<String> setFileName) {
+
+        if (multipartFile != null && !multipartFile.isEmpty()) {
+            // Delete old file if exists
+            if (existingFileName != null) {
+                Path oldFilePath = fullPath.resolve(existingFileName);
+                try {
+                    if (Files.exists(oldFilePath)) {
+                        Files.delete(oldFilePath);
+                        log.info("Deleted old file: {}", oldFilePath);
+                    }
+                } catch (Exception ex) {
+                    log.warn("Failed to delete old file: {}", oldFilePath, ex);
+                }
+            }
+            // Save new file
+            String newFileName = multipartFile.getOriginalFilename();
+            try {
+                FileStorageUtil.saveFile(fullPath, newFileName, multipartFile);
+                setFileName.accept(newFileName);
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to store file", e);
+            }
+        }
+    }
+
 }
