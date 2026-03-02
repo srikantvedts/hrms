@@ -101,6 +101,30 @@ public class TrainingController {
         );
     }
 
+    @PutMapping(value = "/edit-program")
+    public ResponseEntity<ApiResponse> editProgramData(@Valid @RequestBody ProgramDTO dto, @RequestHeader String username) throws IOException {
+        Optional<ProgramDTO> data = trainingService.editProgramData(dto,username);
+        return ResponseEntity.ok(
+                new ApiResponse(true, "Program data edited successfully", data)
+        );
+    }
+
+    @PostMapping(value = "/add-organizer")
+    public ResponseEntity<ApiResponse> addOrganizer(@Valid @RequestBody OrganizerIdDTO dto, @RequestHeader String username) throws IOException {
+        OrganizerIdDTO data = trainingService.addOrganizer(dto,username);
+        return ResponseEntity.ok(
+                new ApiResponse(true, "Organizer data added successfully", data)
+        );
+    }
+
+    @PutMapping(value = "/edit-organizer")
+    public ResponseEntity<ApiResponse> editOrganizer(@Valid @RequestBody OrganizerIdDTO dto, @RequestHeader String username) throws IOException {
+        Optional<OrganizerIdDTO> data = trainingService.editOrganizer(dto,username);
+        return ResponseEntity.ok(
+                new ApiResponse(true, "Organizer data edited successfully", data)
+        );
+    }
+
     @GetMapping(value = "/program")
     public ResponseEntity<ApiResponse> getProgramList(@RequestHeader String username) {
         List<ProgramDTO> list = trainingService.getProgramList(username);

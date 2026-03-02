@@ -67,6 +67,7 @@ public class TrainingService {
     @Transactional(readOnly = true)
     public List<OrganizerIdDTO> getAllAgencies() {
         List<Organizer> list = organizerRepository.findAllByIsActive(1);
+        list = list.stream().sorted(Comparator.comparing(Organizer::getCreatedDate, Comparator.nullsLast(Comparator.naturalOrder()))).toList();
         return list.stream().map(agencyMapper::toDto).collect(Collectors.toCollection(LinkedList::new));
     }
 
@@ -135,6 +136,9 @@ public class TrainingService {
         log.info("Program list fetched by {}", username);
         List<Organizer> organizerList = organizerRepository.findAllByIsActive(1);
         List<Program> programList = programRepository.findAllByIsActive(1);
+        programList = programList.stream()
+                .sorted(Comparator.comparing(Program::getCreatedDate).reversed())
+                .toList();
 
         Map<Long, Organizer> organizerMap = organizerList.stream()
                 .collect(Collectors.toMap(Organizer::getOrganizerId, Function.identity()));
@@ -390,5 +394,46 @@ public class TrainingService {
         });
 
         return feedbbackdto;
+    }
+
+    public Optional<ProgramDTO> editProgramData(@Valid ProgramDTO dto, String username) {
+        log.info("Request to edit program {} by {}", dto.getProgramName(), username);
+
+        return programRepository
+                .findById(dto.getProgramId())
+                .map(existingProgram -> {
+                    existingProgram.setModifiedBy(username);
+                    existingProgram.setModifiedDate(LocalDateTime.now());
+                    programMapper.partialUpdate(existingProgram, dto);
+                    return existingProgram;
+                })
+                .map(programRepository::save)
+                .map(programMapper::toDto);
+    }
+
+    public OrganizerIdDTO addOrganizer(@Valid OrganizerIdDTO dto, String username) {
+        log.info("Request to add organizer {} by {}", dto.getOrganizer(), username);
+        Organizer organizer = agencyMapper.toEntity(dto);
+        organizer.setCreatedBy(username);
+        organizer.setCreatedDate(LocalDateTime.now());
+        organizer.setIsActive(1);
+        organizer = organizerRepository.save(organizer);
+
+        return agencyMapper.toDto(organizer);
+    }
+
+    public Optional<OrganizerIdDTO> editOrganizer(@Valid OrganizerIdDTO dto, String username) {
+        log.info("Request to edit organizer {} by {}", dto.getOrganizer(), username);
+
+        return organizerRepository
+                .findById(dto.getOrganizerId())
+                .map(organizer -> {
+                    organizer.setModifiedBy(username);
+                    organizer.setModifiedDate(LocalDateTime.now());
+                    agencyMapper.partialUpdate(organizer, dto);
+                    return organizer;
+                })
+                .map(organizerRepository::save)
+                .map(agencyMapper::toDto);
     }
 }

@@ -48,6 +48,13 @@ public class Program implements Serializable {
     @Column(name = "created_date")
     private LocalDateTime createdDate;
 
+    @Size(max = 100)
+    @Column(name = "modified_by", length = 100)
+    private String modifiedBy;
+
+    @Column(name = "modified_date")
+    private LocalDateTime modifiedDate;
+
     @NotNull
     @Column(name = "is_active", nullable = false)
     private Integer isActive;
