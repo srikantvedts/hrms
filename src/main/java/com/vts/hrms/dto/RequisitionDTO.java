@@ -94,6 +94,8 @@ public class RequisitionDTO implements Serializable {
     private Long journalId;
     private String titleOfPaper;
 
+    private String isMandatory;
+
     private String forwardByName;
     private LocalDateTime forwardDate;
     private LocalDateTime verifiedDate;

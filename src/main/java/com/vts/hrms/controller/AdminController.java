@@ -348,4 +348,12 @@ public class AdminController {
         }
     }
 
+    @PutMapping(value = "/update-password", produces="application/json")
+    public String updatePassword(@RequestHeader String username, @RequestBody ChangePasswordDTO changePasswordDTO, @RequestHeader(value = "Authorization", required = false) String token){
+        LOG.info(" Inside Update-password user :{}",username);
+        changePasswordDTO.setUsername(username);
+        Integer count = adminService.changePasswordForAllApplications(token, username, changePasswordDTO);
+        return String.valueOf(count);
+    }
+
 }

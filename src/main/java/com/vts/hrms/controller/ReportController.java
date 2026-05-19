@@ -138,13 +138,4 @@ public class ReportController {
         );
     }
 
-    @GetMapping("/mandatory-training")
-    public ResponseEntity<ApiResponse> getMandatoryTrainingReport(@RequestParam LocalDate fromDate, @RequestParam LocalDate toDate) {
-        LOG.info(" Request to fetch mandatory training report list for period {} - {}", fromDate, toDate);
-        List<MandatoryTrainingDTO> data = reportsService.getMandatoryTrainingReport(fromDate,toDate);
-        return ResponseEntity.ok(
-                new ApiResponse(true, "Mandatory training report list fetched successfully", data)
-        );
-    }
-
 }

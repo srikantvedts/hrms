@@ -48,4 +48,7 @@ public interface MasterClientService {
 
     @GetMapping( value = "/get-app-urls", consumes = MediaType.APPLICATION_JSON_VALUE )
     List<ReactAppUrlDTO> getReactAppUrls(@RequestHeader("X-API-KEY") String apiKey);
+
+    @PutMapping( value = "/change-password" )
+    Integer changePassword(@RequestHeader("Authorization") String token, @RequestHeader("username") String username, @RequestBody ChangePasswordDTO changePasswordDTO);
 }

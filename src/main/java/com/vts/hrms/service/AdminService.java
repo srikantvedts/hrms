@@ -95,7 +95,7 @@ public class AdminService {
             EmployeeDTO employee = employeeMap.get(user.getEmpId());
 
             if (employee != null) {
-                user.setEmployeeName(employee.getEmpName());
+                user.setEmployeeName(CommonUtil.buildEmployeeName(employee, false));
                 user.setDesignationName(employee.getEmpDesigName());
                 user.setDivisionName(employee.getEmpDivCode());
             }
@@ -372,7 +372,7 @@ public class AdminService {
         }
     }
 
-    public UserResponseDTO getUserById(Long loginId ) {
+    public UserResponseDTO getUserById(Long loginId) {
 
         Login login = loginRepository.findById(loginId).orElseThrow(() -> new NotFoundException("Login data not found"));
         RoleSecurity roleSecurity = login.getRoleSecurity().stream().findAny().get();
@@ -419,7 +419,7 @@ public class AdminService {
 
                     return NotificationDTO.builder()
                             .notificationId(data.getNotificationId())
-                            .empName(CommonUtil.buildEmployeeName(employeeDTO,true))
+                            .empName(CommonUtil.buildEmployeeName(employeeDTO, true))
 //                            .empDesig(eDto.getEmpDesigCode())
                             .notificationMessage(data.getNotificationMessage())
                             .notificationDate(data.getNotificationDate())
@@ -523,17 +523,17 @@ public class AdminService {
     public long loginStampingInsert(AuditStamping stamping) throws Exception {
         long result = 0;
         if (stamping == null) {
-            log.warn("loginStampingInsert : One required parameters is null - stamping :{}",stamping);
+            log.warn("loginStampingInsert : One required parameters is null - stamping :{}", stamping);
             return result;
         }
-        log.info( "AdminService Inside method loginStampingInsert");
-        try{
-            AuditStamping audit =  auditStampingRepository.save(stamping);
-            if(audit.getAuditStampingId()!=null){
+        log.info("AdminService Inside method loginStampingInsert");
+        try {
+            AuditStamping audit = auditStampingRepository.save(stamping);
+            if (audit.getAuditStampingId() != null) {
                 return 1;
             }
-        }catch (Exception e) {
-            log.error("error in AdminService Inside method loginStampingInsert:{} ", e.getMessage(),e);
+        } catch (Exception e) {
+            log.error("error in AdminService Inside method loginStampingInsert:{} ", e.getMessage(), e);
         }
         return result;
     }
@@ -564,10 +564,10 @@ public class AdminService {
             log.warn("loginStampingUpdate : One required parameters is null - stamping ");
             return result;
         }
-        log.info( "AdminService Inside method LoginStampingUpdate {}", stamping );
-        try{
+        log.info("AdminService Inside method LoginStampingUpdate {}", stamping);
+        try {
             Optional<AuditStamping> prevStampingDetails = auditStampingRepository.findById(stamping.getAuditStampingId());
-            if(prevStampingDetails.isPresent()) {
+            if (prevStampingDetails.isPresent()) {
                 AuditStamping auditStamping = prevStampingDetails.get();
                 auditStamping.setAuditStampingId(stamping.getAuditStampingId());
                 auditStamping.setLogoutType(stamping.getLogoutType());
@@ -575,8 +575,8 @@ public class AdminService {
                 auditStampingRepository.save(auditStamping);
                 return 1;
             }
-        }catch (Exception e) {
-            log.error(" error in AdminService Inside method LoginStampingUpdate {}", e.getMessage(),e);
+        } catch (Exception e) {
+            log.error(" error in AdminService Inside method LoginStampingUpdate {}", e.getMessage(), e);
         }
         return result;
     }
@@ -586,12 +586,12 @@ public class AdminService {
         String oldPassword = changePasswordDTO.getOldPassword();
         String newPassword = changePasswordDTO.getNewPassword();
 
-        if(username==null || oldPassword==null || newPassword == null) {
-            log.warn("changePassword: One of Required parameter is null or empty, username = {}",username);
+        if (username == null || oldPassword == null || newPassword == null) {
+            log.warn("changePassword: One of Required parameter is null or empty, username = {}", username);
             return 0;
         }
         log.info("Inside Update-Password: username = {}", username);
-        try{
+        try {
             Login login = loginRepository.findByUsername(username);
             String actualOldPassword = login.getPassword();
 
@@ -605,7 +605,7 @@ public class AdminService {
                 return 401;
             }
 
-            if(encoder.matches(oldPassword, actualOldPassword)){
+            if (encoder.matches(oldPassword, actualOldPassword)) {
                 String encodedNewPassword = encoder.encode(newPassword);
                 login.setPassword(encodedNewPassword);
                 login.setModifiedBy(username);
@@ -614,7 +614,7 @@ public class AdminService {
                 return 200;
             }
             return 0;
-        }catch(Exception e) {
+        } catch (Exception e) {
             log.error("Exception in Update-Password for username {}: {}", username, e.getMessage(), e);
             return 400;
         }
@@ -652,6 +652,16 @@ public class AdminService {
         } catch (Exception e) {
             log.error("License validation failed", e);
             return false;
+        }
+    }
+
+    public Integer changePasswordForAllApplications(String token, String username, ChangePasswordDTO changePasswordDTO) {
+        log.info(" Inside LoginService changePasswordForAllApplications: {} ", username);
+        try {
+            return masterClient.changePassword(token, username, changePasswordDTO);
+        } catch (Exception e) {
+            log.error("Error while changing the password: {}", e.getMessage(), e);
+            return 400;
         }
     }
 }

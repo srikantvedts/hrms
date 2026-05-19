@@ -95,6 +95,9 @@ public class Requisition implements Serializable {
     @Column(name = "reason")
     private String reason;
 
+    @Column(name = "is_mandatory")
+    private String isMandatory;
+
     @NotNull
     @Column(name = "is_active", nullable = false)
     private Integer isActive;

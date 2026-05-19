@@ -32,7 +32,6 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Service
 public class TrainingService {
@@ -76,11 +75,9 @@ public class TrainingService {
     private final CepAttachmentsRepository cepAttachmentsRepository;
     private final JournalMapper journalMapper;
     private final JournalRepository journalRepository;
-    private final MandatoryTrainingMapper mandatoryTrainingMapper;
-    private final MandatoryTrainingRepository mandatoryTrainingRepository;
 
 
-    public TrainingService(MasterClientService masterClient, OrganizerRepository organizerRepository, OrganizerMapper organizerMapper, CalendarMapper calenderMapper, CalenderRepository calenderRepository, CourseMapper courseMapper, CourseRepository courseRepository, RequisitionMapper requisitionMapper, RequisitionRepository requisitionRepository, FeedbackMapper feedbackMapper, FeedbackRepository feedbackRepository, RequisitionTransactionRepository transactionRepository, MasterCacheService masterCacheService, NotificationRepository notificationRepository, SignRoleAuthorityRepository signRoleAuthorityRepository, RequisitionSequenceRepository sequenceRepository, EvaluationRepository evaluationRepository, EligibilityMapper eligibilityMapper, EligibilityRepository eligibilityRepository, CourseTypeRepository courseTypeRepository, LoginRepository loginRepository, CepRepository cepRepository, CepMapper cepMapper, DistributionRepository distributionRepository, DistributionMapper distributionMapper, CepAttachmentsRepository cepAttachmentsRepository, JournalMapper journalMapper, JournalRepository journalRepository, MandatoryTrainingMapper mandatoryTrainingMapper, MandatoryTrainingRepository mandatoryTrainingRepository) {
+    public TrainingService(MasterClientService masterClient, OrganizerRepository organizerRepository, OrganizerMapper organizerMapper, CalendarMapper calenderMapper, CalenderRepository calenderRepository, CourseMapper courseMapper, CourseRepository courseRepository, RequisitionMapper requisitionMapper, RequisitionRepository requisitionRepository, FeedbackMapper feedbackMapper, FeedbackRepository feedbackRepository, RequisitionTransactionRepository transactionRepository, MasterCacheService masterCacheService, NotificationRepository notificationRepository, SignRoleAuthorityRepository signRoleAuthorityRepository, RequisitionSequenceRepository sequenceRepository, EvaluationRepository evaluationRepository, EligibilityMapper eligibilityMapper, EligibilityRepository eligibilityRepository, CourseTypeRepository courseTypeRepository, LoginRepository loginRepository, CepRepository cepRepository, CepMapper cepMapper, DistributionRepository distributionRepository, DistributionMapper distributionMapper, CepAttachmentsRepository cepAttachmentsRepository, JournalMapper journalMapper, JournalRepository journalRepository) {
         this.masterClient = masterClient;
         this.organizerRepository = organizerRepository;
         this.organizerMapper = organizerMapper;
@@ -109,8 +106,6 @@ public class TrainingService {
         this.cepAttachmentsRepository = cepAttachmentsRepository;
         this.journalMapper = journalMapper;
         this.journalRepository = journalRepository;
-        this.mandatoryTrainingMapper = mandatoryTrainingMapper;
-        this.mandatoryTrainingRepository = mandatoryTrainingRepository;
     }
 
     @Transactional(readOnly = true)
@@ -240,7 +235,9 @@ public class TrainingService {
         log.info("Request to add requisition for program {} by {}", dto.getCourseName(), username);
 
         Requisition requisition = requisitionMapper.toEntity(dto);
-        requisition.setStatus("AA");
+
+        var status = "N".equalsIgnoreCase(dto.getIsMandatory()) ? "AA" : "AP";
+        requisition.setStatus(status);
         requisition.setCreatedBy(username);
         requisition.setCreatedDate(LocalDateTime.now());
         requisition.setIsActive(1);
@@ -300,12 +297,12 @@ public class TrainingService {
         }
 
         requisition = requisitionRepository.save(requisition);
-        insertTransaction(requisition.getRequisitionId(), requisition.getInitiatingOfficer(), requisition.getInitiatingOfficer(), username, "AA", null);
+        insertTransaction(requisition.getRequisitionId(), requisition.getInitiatingOfficer(), requisition.getInitiatingOfficer(), username, status, null);
         return requisitionMapper.toDto(requisition);
     }
 
     @Transactional(readOnly = true)
-    public List<RequisitionDTO> getRequisitionList(Long empId, String roleName, String username) {
+    public List<RequisitionDTO> getRequisitionList(Long empId, String roleName, String username, String isMandatory) {
         log.info("Requisition list fetched for role {} by {}", roleName, username);
 
         List<Requisition> list = new ArrayList<>();
@@ -356,9 +353,13 @@ public class TrainingService {
 
         List<RequisitionDTO> dtoList = requisitionMapper.toDto(list);
 
+        dtoList = dtoList.stream()
+                .filter(dto -> isMandatory.equalsIgnoreCase(dto.getIsMandatory()))
+                .toList();
+
         List<Journal> journals = journalRepository.findAllByIsActiveOrderByJournalIdDesc(1);
         Map<Long, Journal> journalMap = journals.stream()
-                        .collect(Collectors.toMap(Journal::getJournalId, Function.identity()));
+                .collect(Collectors.toMap(Journal::getJournalId, Function.identity()));
 
         dtoList.forEach(dto -> {
             EmployeeDTO employeeDTO = employeeMap.get(dto.getInitiatingOfficer());
@@ -394,7 +395,7 @@ public class TrainingService {
             if (courseType != null) {
                 dto.setCourseType(courseType.getCourseType());
             }
-            if(dto.getJournalId() != null && dto.getJournalId() > 0){
+            if (dto.getJournalId() != null && dto.getJournalId() > 0) {
                 Journal journal = journalMap.get(dto.getJournalId());
                 dto.setTitleOfPaper(journal.getTitleOfPaper());
             }
@@ -1905,9 +1906,9 @@ public class TrainingService {
 
         List<Journal> journals = new ArrayList<>();
 
-        if("ROLE_USER".equalsIgnoreCase(roleName)){
+        if ("ROLE_USER".equalsIgnoreCase(roleName)) {
             journals = journalRepository.findAllByEmpIdAndIsActiveOrderByJournalIdDesc(empId, 1);
-        }else{
+        } else {
             journals = journalRepository.findAllByIsActiveOrderByJournalIdDesc(1);
         }
 
@@ -1958,84 +1959,40 @@ public class TrainingService {
                 .map(journalMapper::toDto);
     }
 
-    @Cacheable(value = "mandatoryTrainingCache", key = "#username")
-    public List<MandatoryTrainingDTO> getMandatoryTrainingList(Long empId, String roleName, String username) {
-        log.info("Request to fetch mandatory training list by {}", username);
+    @Transactional
+    public RequisitionDTO acceptMandatoryTraining(RequisitionDTO dto, String username) {
+        log.info("Request to accept mandatory training for id {} by {}", dto.getRequisitionId(), username);
 
-        List<MandatoryTraining> mandatoryTrainings = new ArrayList<>();
-
-        if (Stream.of("ROLE_ADMIN", "ROLE_AD_HRT", "ROLE_SA_HRT", "ROLE_DH", "ROLE_DIRECTOR").anyMatch(roleName::equalsIgnoreCase)) {
-            mandatoryTrainings = mandatoryTrainingRepository.findAllByIsActiveOrderByMandatoryTrainingIdDesc(1);
-        } else {
-            mandatoryTrainings = mandatoryTrainingRepository.findAllByParticipantIdAndIsActiveOrderByMandatoryTrainingIdDesc(empId, 1);
+        if (dto.getRequisitionId() == null) {
+            throw new NotFoundException("Requisition id cannot be null");
         }
 
-        List<MandatoryTrainingDTO> dtoList = mandatoryTrainingMapper.toDto(mandatoryTrainings);
+        Requisition requisition = requisitionRepository.findById(dto.getRequisitionId())
+                .orElseThrow(() -> new NotFoundException("Requisition data not found"));
 
-        Map<Long, EmployeeDTO> employeeDTOMap = masterCacheService.getLongEmployeeDTOMap();
+        requisition.setStatus("PA");
+        requisition.setModifiedBy(username);
+        requisition.setModifiedDate(LocalDateTime.now());
 
-        dtoList.forEach(data -> {
-            EmployeeDTO empDto = employeeDTOMap.get(data.getParticipantId());
-            if (empDto != null) {
-                data.setParticipantName(CommonUtil.buildEmployeeName(empDto, true));
-            }
-        });
-        return dtoList;
+        insertTransaction(requisition.getRequisitionId(), dto.getActionBy(), dto.getActionBy(), username, "PA", null);
+
+        return requisitionMapper.toDto(requisition);
     }
 
-
-    @CacheEvict(value = "mandatoryTrainingCache", allEntries = true)
-    @Transactional
-    public MandatoryTrainingDTO addMandatoryTrainingData(@Valid MandatoryTrainingDTO dto, String username) {
-        log.info("Request to add mandatory training by {}", username);
-
-        MandatoryTraining training = mandatoryTrainingMapper.toEntity(dto);
-
-        training.setCreatedBy(username);
-        training.setCreatedDate(LocalDateTime.now());
-        training.setIsActive(1);
-
-        training = mandatoryTrainingRepository.save(training);
-        return mandatoryTrainingMapper.toDto(training);
-    }
-
-
-    @CacheEvict(value = "mandatoryTrainingCache", allEntries = true)
-    @Transactional
-    public Optional<MandatoryTrainingDTO> editMandatoryTrainingData(@Valid MandatoryTrainingDTO dto, String username) {
-        log.info("Request to update mandatory training for id {} by {}", dto.getMandatoryTrainingId(), username);
-
-        return mandatoryTrainingRepository.findById(dto.getMandatoryTrainingId())
-                .map(ex -> {
-                    ex.setModifiedBy(username);
-                    ex.setModifiedDate(LocalDateTime.now());
-                    mandatoryTrainingMapper.partialUpdate(ex, dto);
-                    return ex;
-                })
-                .map(mandatoryTrainingRepository::save)
-                .map(mandatoryTrainingMapper::toDto);
-    }
-
-    public MandatoryTrainingDTO getMandatoryTrainingById(Long trainId, String username) {
-        log.info("Request to fetch mandatory training by id {} by {}", trainId, username);
-
-        if (trainId == null) {
-            throw new NotFoundException("Mandatory training id cannot be null");
-        }
-        MandatoryTraining training = mandatoryTrainingRepository.findById(trainId)
-                .orElseThrow(() -> new NotFoundException("Mandatory training data not found"));
-
-        return mandatoryTrainingMapper.toDto(training);
-    }
-
-    public List<MandatoryTrainingDTO> getMandatoryTrainingByParticipantId(Long id, String username) {
+    public List<RequisitionDTO> getMandatoryTrainingByParticipantId(Long id, String username) {
         log.info("Request to fetch mandatory training by participant id {} by {}", id, username);
         if (id == null) {
             throw new NotFoundException("Participant id cannot be null");
         }
-        List<MandatoryTraining> trainingList = mandatoryTrainingRepository
-                .findAllByParticipantIdAndIsActiveOrderByMandatoryTrainingIdDesc(id,1);
 
-        return mandatoryTrainingMapper.toDto(trainingList);
+        Map<Long, Course> courseMap = masterCacheService.getCourseMap();
+        List<Requisition> list = requisitionRepository.findAllByInitiatingOfficerAndIsActiveOrderByRequisitionIdDesc(id,1);
+
+        List<RequisitionDTO> dtoList = requisitionMapper.toDto(list);
+        dtoList.forEach(data->{
+            Course course = courseMap.get(data.getCourseId());
+            if(course!=null) data.setCourseName(course.getCourseName());
+        });
+        return dtoList;
     }
 }

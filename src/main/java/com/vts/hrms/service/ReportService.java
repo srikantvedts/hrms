@@ -52,8 +52,6 @@ public class ReportService {
     private final SponsorshipMapper sponsorshipMapper;
     private final DistributionRepository distributionRepository;
     private final DistributionMapper distributionMapper;
-    private final MandatoryTrainingMapper mandatoryTrainingMapper;
-    private final MandatoryTrainingRepository mandatoryTrainingRepository;
 
 
     @Cacheable(value = "getNominalROllList")
@@ -827,7 +825,7 @@ public class ReportService {
                     dto.setCourseType(typeDTO.getCourseType());
                     dto.setVenue(course.getVenue());
 
-                    dto.setTitleOfPaper(journalDTO.getTitleOfPaper());
+                    dto.setTitleOfPaper(journalDTO!=null ? journalDTO.getTitleOfPaper() : "");
 
                     if (organizer != null) {
                         dto.setOrganizer(organizer.getOrganizer());
@@ -849,26 +847,4 @@ public class ReportService {
                 .toList();
     }
 
-    public List<MandatoryTrainingDTO> getMandatoryTrainingReport(LocalDate fromDate, LocalDate toDate) {
-        log.info("Fetching mandatory training report data");
-
-        List<MandatoryTraining> mandatoryTrainings = mandatoryTrainingRepository.getTrainingDataByDateRange(fromDate,toDate);
-        List<MandatoryTrainingDTO> dtoList = mandatoryTrainingMapper.toDto(mandatoryTrainings);
-
-        Map<Long, EmployeeDTO> employeeDTOMap = masterCacheService.getLongEmployeeDTOMap();
-
-        dtoList.forEach(data -> {
-            EmployeeDTO empDto = employeeDTOMap.get(data.getParticipantId());
-            if (empDto != null) {
-                data.setEmpNo(empDto.getEmpNo());
-                data.setParticipantName(CommonUtil.buildEmployeeName(empDto, false));
-                data.setDesigCadre(empDto.getDesigCadre());
-                data.setEmpDesigName(empDto.getEmpDesigName());
-                data.setEmpDivCode(empDto.getEmpDivCode());
-                data.setEmail(empDto.getEmail());
-                data.setMobileNo(empDto.getMobileNo());
-            }
-        });
-        return dtoList;
-    }
 }

@@ -120,4 +120,5 @@ public interface RequisitionRepository extends JpaRepository<Requisition, Long> 
             """)
     List<Requisition> findActiveRequisitionsWithJournalId(@Param("fromDate") LocalDate fromDate,
                                                           @Param("toDate") LocalDate toDate);
+
 }

@@ -180,7 +180,7 @@ public class TrainingController {
 
     @GetMapping(value = "/requisition")
     public ResponseEntity<ApiResponse> getRequisitionList(@RequestParam Long empId, @RequestParam String roleName, @RequestHeader String username) {
-        List<RequisitionDTO> list = trainingService.getRequisitionList(empId, roleName, username);
+        List<RequisitionDTO> list = trainingService.getRequisitionList(empId, roleName, username, "N");
 
         return ResponseEntity.ok(
                 new ApiResponse(true, "Requisition list fetched", list)
@@ -608,39 +608,24 @@ public class TrainingController {
 
     @GetMapping(value = "/mandatory-training")
     public ResponseEntity<ApiResponse> getMandatoryTrainingList(@RequestParam Long empId, @RequestParam String roleName, @RequestHeader String username) {
-        List<MandatoryTrainingDTO> list = trainingService.getMandatoryTrainingList(empId,roleName,username);
+        List<RequisitionDTO> list = trainingService.getRequisitionList(empId, roleName, username, "Y");
+
         return ResponseEntity.ok(
-                new ApiResponse(true, "Mandatory training list fetched successfully", list)
+                new ApiResponse(true, "Requisition of mandatory training list fetched", list)
         );
     }
 
-    @PostMapping(value = "/add-mandatory-training")
-    public ResponseEntity<ApiResponse> addMandatoryTrainingData(@Valid @RequestBody MandatoryTrainingDTO dto, @RequestHeader String username) {
-        MandatoryTrainingDTO data = trainingService.addMandatoryTrainingData(dto, username);
+    @PostMapping(value = "/accept-training")
+    public ResponseEntity<ApiResponse> acceptMandatoryTraining(@RequestBody RequisitionDTO dto, @RequestHeader String username) {
+        RequisitionDTO data = trainingService.acceptMandatoryTraining(dto, username);
         return ResponseEntity.ok(
-                new ApiResponse(true, "Mandatory training data added successfully", data)
-        );
-    }
-
-    @PutMapping(value = "/edit-mandatory-training")
-    public ResponseEntity<ApiResponse> editMandatoryTrainingData(@Valid @RequestBody MandatoryTrainingDTO dto, @RequestHeader String Username ) {
-        Optional<MandatoryTrainingDTO> list = trainingService.editMandatoryTrainingData(dto, Username);
-        return ResponseEntity.ok(
-                new ApiResponse(true, "Mandatory training data Updated successfully", list)
-        );
-    }
-
-    @GetMapping(value = "/mandatoryTrainingById/{id}")
-    public ResponseEntity<ApiResponse> getMandatoryTrainingById(@PathVariable Long id, @RequestHeader String username) {
-        MandatoryTrainingDTO list = trainingService.getMandatoryTrainingById(id,username);
-        return ResponseEntity.ok(
-                new ApiResponse(true, "Mandatory training data fetched successfully", list)
+                new ApiResponse(true, "Mandatory training accepted successfully", data)
         );
     }
 
     @GetMapping("/mandatory-training/participant/{id}")
     public ResponseEntity<ApiResponse> getMandatoryTrainingByParticipantId(@PathVariable Long id, @RequestHeader String username) {
-        List<MandatoryTrainingDTO> list = trainingService.getMandatoryTrainingByParticipantId(id,username);
+        List<RequisitionDTO> list = trainingService.getMandatoryTrainingByParticipantId(id,username);
         return ResponseEntity.ok(
                 new ApiResponse(true, "Mandatory training data fetched successfully", list)
         );
